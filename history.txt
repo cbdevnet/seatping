@@ -1,0 +1,18 @@
+17042012 2134 Now with version history, basic eyecandy and position autosubmit for the lazy-ass faggots
+17042012 2241 Added view accumulation. "Show last n minutes" feature
+17042012 2256 Minor security fixes (htmlentities), submit buttons
+18042012 1104 Added Gerthsen Hall. Minor UI changes.
+18042012 2256 Fixed F5 checkin bug. Reworked confirmation button. Renamed some fields in DB. Created base for user system
+18042012 2349 Fixed checkin locaddit display. Added user system.
+19042012 0016 Formatting stuff. Added human-readable checkin time. Gerthsen vectorization.
+19042012 0057 Added PNG transparency. Added named checkin group map titles.
+19042012 1251 Added RSS feed generation. Fixed minot login bug. Removed superfluous view in DB.
+19042012 1427 Fixed logout bug. Modified RSS.
+20042012 0902 Added LiveView RSS. Added HSaF (preliminary/done)
+19102012 0041 Starting database migration to SQLite3 (fixed some inconsistencies in database), added Tulla Hall
+19102012 0156 SQLite3 transition done, needs testing though.
+19102012 1650 SQLite3 deployed & tests passed.
+19102012 1707 Bugfix release (URL mismatch), added requirements.txt
+24102012 1018 Added heatmap feature (hidden)
+24102012 2222 Added meta info for google.
+30102012 1151 Changed password hashing to use a salt and sha256

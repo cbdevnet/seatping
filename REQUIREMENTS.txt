@@ -1,0 +1,4 @@
+To install seatping on your own server, you need the following packages installed
+php5-cgi
+php5-sqlite
+php5-gd
