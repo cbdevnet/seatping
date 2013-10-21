@@ -109,7 +109,7 @@
 	
 	if(isset($_POST["l"])){
 		$u=$db->escapeString(htmlentities($_POST["u"]));
-		$p=sha256($salt.sha1($_POST["p"]));
+		$p=hash("sha256",($salt.sha1($_POST["p"])));
 		if(!empty($u)){
 			$user=$db->querySingle("select * from users where name='".$u."'",TRUE);
 			
