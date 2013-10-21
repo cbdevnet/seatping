@@ -408,6 +408,7 @@
 			<h2>Last 10 public checkins</h2>
 			<?php
 				while($it!==FALSE){
+					print("[".date("d.m.Y H:i",$it["cdate"])."] ");
 					print('<a href="?cid='.$it["cid"].'">');
 					print((($it["uid"]==0)?$it["cid"]:$it["username"])."</a> checked in at ".$it["hall"]);
 					if(!empty($it["loctext"])){
