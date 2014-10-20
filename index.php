@@ -8,9 +8,7 @@
 	Have fun.
 	*/
 	require_once("db_conn.php");
-	$auth_methods["local"]=true;
-	$auth_methods["system"]=true;
-	$pepper="YOUR_PEPPER_HERE";
+	require_once("settings.php");
 	
 	$halls=$db->query("
 		SELECT

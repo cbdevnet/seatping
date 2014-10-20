@@ -1,4 +1,6 @@
 <?php
-	$dbfile="ping.db3";
-	$salt="YOURSALTHERE";
+	$auth_methods["local"]=true;
+	$auth_methods["system"]=true;
+	$pepper="YOUR_PEPPER_HERE";
+
 ?>
