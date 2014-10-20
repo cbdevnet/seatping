@@ -7,17 +7,22 @@
 	Licensed as WTFPL (see COPYING.txt)
 	Have fun.
 	*/
-	require_once("settings.php");
+	require_once("db_conn.php");
+	$auth_methods["local"]=true;
+	$auth_methods["system"]=true;
+	$pepper="YOUR_PEPPER_HERE";
 	
-	try{
-		$db=new SQLite3($dbfile);
-	}
-	catch(Exception $e){
-		print($e->getMessage());
-		die();
-	}
+	$halls=$db->query("
+		SELECT
+			hall_id,
+			hall_name
+		FROM
+			halls
+		WHERE
+			1
+	");
+	$halls=$halls->fetchAll(PDO::FETCH_ASSOC);
 	
-	$db->busyTimeout(500);
 	
 	if(isset($_GET["rss"])){
 		header("Content-Type: application/xml"); 
@@ -36,27 +41,39 @@
 					<generator>seatping</generator>
 					<ttl>5</ttl>
 					<?php
-						$items=$db->query("select * from composite where public=1 limit 50");
-						$it=$items->fetchArray();
-						while($it!==FALSE){
+						$checkins=$db->query("
+							SELECT
+								user_name,
+								hall_name,
+								ping_hash,
+								ping_annotation,
+								ping_date
+							FROM
+								checkins
+							WHERE
+								ping_public
+							LIMIT 50
+						");
+
+						$checkins=$checkins->fetchAll(PDO::FETCH_ASSOC);
+						foreach($checkins as $ping){
 							?>
 								<item>
-									<title><?php print($it["username"]); ?> checked in to <?php print($it["hall"]); ?></title>
-									<link>http://seatping.kitinfo.de/?cid=<?php print($it["cid"]); ?></link>
+									<title><?php print($ping["user_name"]); ?> checked in to <?php print($ping["hall_name"]); ?></title>
+									<link>http://seatping.kitinfo.de/?ping=<?php print($ping["ping_hash"]); ?></link>
 									<description>
 										<?php 
-											if(!empty($it["loctext"])){print(htmlspecialchars(html_entity_decode($it["loctext"])));}
+											if(!empty($ping["ping_annotation"])){print(htmlspecialchars(html_entity_decode($ping["ping_annotation"])));}
 											else{print("No further information.");}
 										?>
 									</description>
-									<pubDate><?php print(date("r",$it["cdate"])); ?></pubDate>
-									<author><?php print($it["username"]); ?></author>
+									<pubDate><?php print(date("r",$ping["ping_date"])); ?></pubDate>
+									<author><?php print($ping["user_name"]); ?></author>
 									<category>Checkin</category>
-									<guid isPermaLink="false"><?php print($it["cid"]); ?></guid>
+									<guid isPermaLink="false"><?php print($ping["ping_hash"]); ?></guid>
 									
 								</item>
 							<?php
-							$it=$items->fetchArray();
 						}
 					?>
 				</channel>	
@@ -75,21 +92,18 @@
 					<generator>seatping</generator>
 					<ttl>5</ttl>
 					<?php
-						$halls=$db->query("select * from halls where 1");
-						$it=$halls->fetchArray();
-						while($it!==FALSE){
+						foreach($halls as $hall){
 							?>
 								<item>
-									<title>Last 90 minutes in <?php print($it["name"]); ?></title>
+									<title>Last 90 minutes in <?php print($hall["hall_name"]); ?></title>
 									<link>http://seatping.kitinfo.de/</link>
-									<description><![CDATA[<img src="http://seatping.kitinfo.de/map.php?hall=<?php print($it["hallid"]); ?>&last=90" /> ]]></description>
+									<description><![CDATA[<img src="http://seatping.kitinfo.de/map.php?hall=<?php print($hall["hall_id"]); ?>&last=90" /> ]]></description>
 									<pubDate><?php print(date("r")); ?></pubDate>
 									<author>seatping</author>
 									<category>LiveView</category>
-									<guid isPermaLink="false"><?php print(sha1($it["hallid"])); ?></guid>
+									<guid isPermaLink="false"><?php print(sha1($hall["hall_id"])); ?></guid>
 								</item>
 							<?php
-							$it=$halls->fetchArray();
 						}
 					?>
 			</channel>
@@ -102,34 +116,57 @@
 	
 	session_start();
 	
-	if(isset($_GET["l"])){
-		session_destroy();
-		unset($_SESSION);
+	if(isset($_GET["logout"])){
+		session_regenerate_id(TRUE);
+		$_SESSION=array();
 	}
 	
-	if(isset($_POST["l"])){
-		$u=$db->escapeString(htmlentities($_POST["u"]));
-		$p=hash("sha256",($salt.sha1($_POST["p"])));
-		if(!empty($u)){
-			$user=$db->querySingle("select * from users where name='".$u."'",TRUE);
+	if(isset($_POST["login"])&&$auth_methods["local"]){
+		$_POST["login"]="";
+		$user_name=htmlentities($_POST["user_name"]);
+		$user_password=hash("sha256",$_POST["user_password"].$pepper);
+		if(!empty($user_name)){
+			$user_data=$db->prepare("
+				SELECT 
+					user_id,
+					user_name,
+					user_identity
+				FROM 
+					users 
+				WHERE 
+					user_name=:uname 
+					AND user_source='local'
+			");
+			$user_data->execute(array(":uname"=>$user_name));
+			$user_data=$user_data->fetch(PDO::FETCH_ASSOC);
 			
-			if($user==NULL){
-				//reg
-				if($db->exec("insert into users (name,pw) values ('".$u."','".$p."')")){
-					$loginState="Account created.";
-					$_SESSION["uid"]=$db->lastInsertRowID();
-					$_SESSION["name"]=$u;
+			if($user_data===false){
+				//register new local user
+				$register_user=$db->prepare("
+					INSERT INTO users 
+					(user_name, user_identity, user_source)
+					VALUES
+					(:uname, :upass, 'local')
+					");
+				
+				if($register_user->execute(array(
+					":uname"=>$user_name,
+					":upass"=>$user_password
+				))){
+					$_POST["login"]="Account created.";
+					$_SESSION["user_id"]=$db->lastInsertId();
+					$_SESSION["user_name"]=$user_name;
 				}
 				else{
-					$loginState="Something strange happened.";
+					$_POST["login"]="Failed to register user.";
 				}
 			}
-			else if($user["pw"]==$p){
-				$_SESSION["uid"]=$user["uid"];
-				$_SESSION["name"]=$user["name"];
+			else if($user_data["user_identity"]==$user_password){
+				$_SESSION["user_id"]=$user_data["user_id"];
+				$_SESSION["user_name"]=$user_data["user_name"];
 			}
 			else{
-				$loginState="That seemed wrong.";
+				$_POST["login"]="Failed to log in.";
 			}
 		}
 	}
@@ -139,7 +176,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 	<head>
 		<title>seatping</title>
-		<meta http-equiv="Content-Type" content="text/html; charset=windows-1252" />
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 		<style type="text/css">
 			h1, h2 {
 				margin-top:5px;
@@ -216,7 +253,7 @@
 			}
 		</style>
 		<meta name="description" content="seatping - a location sharing tool for lecture halls at the Karlsruhe Institute of Technology." />
-		<meta name="keywords" content="seatping, location sharing, hoersaal, hörsaal, lecture hall, kit, #kitinfo, kitinfo, studium, irc, karlsruhe" />
+		<meta name="keywords" content="seatping, location sharing, hoersaal, hoersaal, lecture hall, kit, #kitinfo, kitinfo, studium, irc, karlsruhe" />
 		<meta name="robots" content="index,follow" />
 	</head>
 	<body>
@@ -226,8 +263,8 @@
 			<div style="text-align:right;width:100%;margin-bottom:-15px;font-size:90%;">
 				<span style="float:left;">RSS: <a href="?rss">Checkins</a> <a href="?rss=lv">LiveView</a></span>
 				<span>
-					<?php if(isset($_SESSION["uid"])){ ?>
-						&lt;<?php print($_SESSION["name"]); ?>&gt; <a href="?l">Logout</a>
+					<?php if(isset($_SESSION["user_id"])){ ?>
+						&lt;<?php print($_SESSION["user_name"]); ?>&gt; <a href="?logout">Logout</a>
 					<?php } else { ?>
 						Not logged in.
 					<?php } ?>
@@ -240,21 +277,50 @@
 		</div>
 		
 		<?php
-			if(isset($_GET["cid"])){
-				$cid=$db->escapeString($_GET["cid"]);
-				$cdata=$db->querySingle("select * from composite where cid='".$cid."'",TRUE);
-				if($cdata!=NULL){
+			if(isset($_GET["ping"])){
+				//display specific ping
+				$ping_data=$db->prepare("
+					SELECT 
+						user_id,
+						user_name,
+						ping_hash,
+						ping_x,
+						ping_y,
+						ping_date,
+						ping_annotation,
+						hall_name,
+						hall_id
+					FROM checkins
+					WHERE
+						ping_hash=:hash
+					");
+				
+				$ping_data->execute(array(":hash"=>$_GET["ping"]));
+				$ping_data=$ping_data->fetch(PDO::FETCH_ASSOC);
+				
+				if($ping_data!==false){
 					?>
 						<div id="view" class="box bottomcorner topcorner">
-								<strong><?php print(($cdata["uid"]==0)?($cdata["cid"]):($cdata["username"])); ?></strong><br /> checked in to <?php print($cdata["hall"]); ?> (<?php print($cdata["x"]."|".$cdata["y"]); ?>) at <?php print(date("d.m.Y H:i",$cdata["cdate"])); ?><br />
-								<img src="map.php?hall=<?php print($cdata["hallid"]."&x=".$cdata["x"]."&y=".$cdata["y"]); ?>" alt="<?php print($cdata["hall"]); ?>"/><br /><?php if(!empty($cdata["loctext"])){print("<em>".$cdata["loctext"]."</em>");} ?>
+								<strong>
+									<?php print(($ping_data["user_id"]==0)?($ping_data["ping_hash"]):($ping_data["user_name"])); ?>
+								</strong>
+								<br />
+								checked in to 
+								<?php print($ping_data["hall_name"]); ?> 
+								(<?php print($ping_data["ping_x"]."|".$ping_data["ping_y"]); ?>) 
+								at <?php print(date("d.m.Y H:i",$ping_data["ping_date"])); ?>
+								<br />
+								<img src="map.php?hall=<?php print($ping_data["hall_id"]."&x=".$ping_data["ping_x"]."&y=".$ping_data["ping_y"]); ?>" 
+								alt="<?php print($ping_data["hall_name"]); ?>"/>
+								<br />
+								<?php if(!empty($ping_data["ping_annotation"])){print("<em>".$ping_data["ping_annotation"]."</em>");} ?>
 						</div>
 					<?php
 				}
 				else{
 					?>
 						<div id="view" class="box bottomcorner topcorner">
-								This seems to be an invalid CID. Last error was <?php print($db->lastErrorMsg()); ?>
+								This seems to be an invalid CID. (<?php print(json_encode($db->errorInfo())); ?>)
 						</div>
 					<?php
 				}
@@ -267,24 +333,30 @@
 				<?php
 					if(!isset($_GET["hall"])||isset($_GET["last"])){
 						print('<h3>Step 1 of 4: Select Hall</h2>	<select name="hall">');
-						$data=$db->query("select * from halls where 1");
-						$it=$data->fetchArray();
-						while($it!==FALSE){
-							print("<option value='".$it["hallid"]."'>".$it["name"]."</option>");
-							$it=$data->fetchArray();
+						foreach($halls as $hall){
+							print("<option value='".$hall["hall_id"]."'>".$hall["hall_name"]."</option>");
 						}
 						print("</select>");
 						$nextButtonText="Next";
 					}
 					else{
 						if(!isset($_GET["x"])||!isset($_GET["y"])){
-							$hall=$db->querySingle("select * from halls where hallid=".intval($_GET["hall"]),TRUE);
-							if($hall==NULL){
+							$hall_data=$db->prepare("
+								SELECT
+									hall_id,
+									hall_name
+								FROM halls
+								WHERE
+									hall_id=:hallid
+							");
+							$hall_data->execute(array(":hallid"=>intval($_GET["hall"])));
+							$hall_data=$hall_data->fetch(PDO::FETCH_ASSOC);
+							if($hall_data===false){
 								die("Nice try.");
 							}
 							?>
 								<h3>Step 2 of 4: Select Spot</h3>
-								Click your approximate position on the map of <?php print($hall["name"]); ?>
+								Click your approximate position on the map of <?php print($hall_data["hall_name"]); ?>
 								<input type="hidden" name="hall" value="<?php print($_GET["hall"]); ?>" /><br />
 								<script language="JavaScript">
 								//modified from http://www.emanueleferonato.com/2006/09/02/click-image-and-get-coordinates-with-javascript/
@@ -296,7 +368,9 @@
 									document.checkin.submit();
 								}
 								</script>
-								<img id="pointer_img" onclick="point_it(event)" src="map.php?hall=<?php print($hall["hallid"]); ?>" alt="<?php print($hall["name"]); ?>"/><br />
+								<img id="pointer_img" onclick="point_it(event)" 
+									src="map.php?hall=<?php print($hall_data["hall_id"]); ?>" 
+									alt="<?php print($hall_data["hall_name"]); ?>"/><br />
 								
 								<input type="text" name="x" size="4" />
 								<input type="text" name="y" size="4" />
@@ -319,8 +393,17 @@
 							}
 							else{
 								if(!isset($_GET["publish"])){
-									$hall=$db->querySingle("select * from halls where hallid=".intval($_GET["hall"]),TRUE);
-									if($hall==NULL){
+									$hall_data=$db->prepare("
+										SELECT
+											hall_id,
+											hall_name
+										FROM halls
+										WHERE
+											hall_id=:hallid
+									");
+									$hall_data->execute(array(":hallid"=>intval($_GET["hall"])));
+									$hall_data=$hall_data->fetch(PDO::FETCH_ASSOC);
+									if($hall_data===false){
 										die("Nice try.");
 									}
 									?>
@@ -332,36 +415,43 @@
 										<input type="hidden" name="public" value="<?php print($_GET["public"]); ?>" />
 										<input type="hidden" name="publish" value="easteregg" />
 										Clicking 'confirm' publishes your checkin.<br /><br/>
-										<strong>You will be checking in <?php ($_GET["public"]=="y")?print("publicly"):print("anonymously"); ?> to <?php print($hall["name"]); ?>.</strong><br />
-										<img src="map.php?hall=<?php print($hall["hallid"]); ?>&x=<?php print($_GET["x"]);?>&y=<?php print($_GET["y"]); ?>" alt="<?php print($hall["name"]); ?>"/><br />
+										<strong>You will be checking in <?php ($_GET["public"]=="y")?print("publicly"):print("anonymously"); ?> to <?php print($hall_data["hall_name"]); ?>.</strong><br />
+										<img src="map.php?hall=<?php print($hall_data["hall_id"]); ?>&x=<?php print($_GET["x"]);?>&y=<?php print($_GET["y"]); ?>" alt="<?php print($hall_data["hall_name"]); ?>"/><br />
 									<?php
 									$nextButtonText="Confirm";
 								}
 								else{
-									//sanitize input
-									$hall=intval($_GET["hall"]);
-									$date=time();
-									$x=intval($_GET["x"]);
-									$y=intval($_GET["y"]);
-									$extinfo=htmlentities($db->escapeString($_GET["addinfo"]));
-									$cid=md5("checkin".$extinfo.$hall.$x."-".$y);
-									$pubstate=($_GET["public"]=="y")?1:0;
 									
-									if($db->exec("insert into checkins (user,saal,cdate,pointx,pointy,extinfo,public,cid) values (".((!isset($_SESSION["uid"]))?0:$_SESSION["uid"]).",".$hall.",".$date.",".$x.",".$y.",'".$extinfo."',".$pubstate.",'".$cid."')")){										
+									
+									$insert_ping=$db->prepare("
+										INSERT INTO
+											pings
+										(ping_user, ping_hall, ping_date, ping_y, ping_x, ping_annotation, ping_public, ping_hash)
+										VALUES
+										(:user, :hall, :date, :y, :x, :annotation, :public, :hash)
+									");
+									
+									$hash=md5(session_id().$_GET["addinfo"].$_GET["hall"].$_GET["x"].$_GET["y"]);
+									
+									if($insert_ping->execute(array(
+										":user"=>((!isset($_SESSION["user_id"]))?0:$_SESSION["user_id"]),
+										":hall"=>intval($_GET["hall"]),
+										":date"=>time(),
+										":x"=>intval($_GET["x"]),
+										":y"=>intval($_GET["y"]),
+										":annotation"=>htmlentities($_GET["addinfo"]),
+										":public"=>($_GET["public"]=="y")?1:0,
+										":hash"=>$hash
+									))){
 										?>
 										<h3>All done!</h3>
 										You were successfully checked in.<br />
-										Use the Link <a href="http://<?php print($_SERVER["SERVER_NAME"]); ?>/?cid=<?php print($cid); ?>">http://<?php print($_SERVER["SERVER_NAME"]); ?>/?cid=<?php print($cid); ?></a> to share your checkin!
+										Use the Link <a href="http://<?php print($_SERVER["SERVER_NAME"]); ?>/?ping=<?php print($hash); ?>">http://<?php print($_SERVER["SERVER_NAME"]); ?>/?ping=<?php print($hash); ?></a> to share your checkin!
 										<br />
 										<?php
 									}
 									else{
-										if($db->lastErrorCode()==19){
-											print("Nah dude. No F5 checkins.<br />");
-										}
-										else{
-											print("checkin failed with ".$db->lastErrorMsg()."<br />");
-										}
+										print("checkin failed with ".json_encode($db->errorInfo())."<br />");
 									}
 								}
 							}
@@ -381,11 +471,8 @@
 				<h2>Show checkins over time</h2>
 				Last <input type="text" name="last" value="10" size="4" /> minutes for <select name="hall">
 					<?php
-						$data=$db->query("select * from halls where 1");
-						$it=$data->fetchArray();
-						while($it!==FALSE){
-							print("<option value='".$it["hallid"]."'>".$it["name"]."</option>");
-							$it=$data->fetchArray();
+						foreach($halls as $hall){
+							print("<option value='".$hall["hall_id"]."'>".$hall["hall_name"]."</option>");
 						}
 						print("</select>");
 					?>
@@ -401,39 +488,52 @@
 		</div>
 		
 		<div id="show" class="box">
-			<?php
-				$last=$db->query("select * from composite where public=1 limit 10");
-				$it=$last->fetchArray();
+			<?php				
+				$last_pings=$db->query("
+					SELECT
+						ping_date,
+						ping_hash,
+						user_id,
+						user_name,
+						hall_name,
+						ping_annotation
+					FROM checkins
+					WHERE ping_public
+					LIMIT 10
+				");
+				
+				$last_pings=$last_pings->fetchAll(PDO::FETCH_ASSOC);
 			?>
 			<h2>Last 10 public checkins</h2>
 			<?php
-				while($it!==FALSE){
-					print("[".date("d.m.Y H:i",$it["cdate"])."] ");
-					print('<a href="?cid='.$it["cid"].'">');
-					print((($it["uid"]==0)?$it["cid"]:$it["username"])."</a> checked in at ".$it["hall"]);
-					if(!empty($it["loctext"])){
-						print(' <em>'.$it["loctext"].'</em>');
+				if($last_pings!==false){
+					foreach($last_pings as $ping){
+						print("[".date("d.m.Y H:i",$ping["ping_date"])."] ");
+						print('<a href="?ping='.$ping["ping_hash"].'">');
+						print((($ping["user_id"]==0)?$ping["ping_hash"]:$ping["user_name"])."</a> checked in at ".$ping["hall_name"]);
+						if(!empty($ping["ping_annotation"])){
+							print(' <em>'.$ping["ping_annotation"].'</em>');
+						}
+						print("<br />");
 					}
-					print("<br />");
-					$it=$last->fetchArray();
 				}
 			?>
 		</div>
 		
 		<?php
-			if(!isset($_SESSION["uid"])){
+			if(!isset($_SESSION["user_id"])){
 				?>
 				<div id="login" class="box">
 					<form action="" method="post">
 						<span style="float:left;">Login/Register</span>
 						<?php
-							if(isset($loginState)){
-								print($loginState);
+							if(isset($_POST["login"])){
+								print($_POST["login"]);
 							}
 						?>
-						<input type="text" name="u" size="7" />
-						<input type="password" name="p" size="7"/>
-						<input type="submit" name="l" value="Send" />
+						<input type="text" name="user_name" size="7" />
+						<input type="password" name="user_password" size="7"/>
+						<input type="submit" name="login" value="Send" />
 					</form>
 				</div>
 				<?php
@@ -441,7 +541,7 @@
 		?>
 		
 		<div id="footer" class="box bottomcorner">
-			<a href="source.7z">Get source (PHP/SQLite)</a>  | <em>Source may contain strong language. Not suitable for children (emotional or otherwise).</em> Hall sketch vectorization by klaxa
+			<a href="https://github.com/cbdevnet/seatping">Browse source (PHP/SQLite)</a>  | <em>Source may contain strong language. Not suitable for children (emotional or otherwise).</em> Hall sketch vectorization by klaxa
 		</div>
 	</body>
 </html>

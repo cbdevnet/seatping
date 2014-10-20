@@ -16,4 +16,5 @@
 24102012 1018 Added heatmap feature (hidden)
 24102012 2222 Added meta info for google.
 30102012 1151 Changed password hashing to use a salt and sha256
-21102013 1743 Changed password hashing call to conform to new specs. Added timestamp display in checkin list
+21102013 1743 Changed password hashing call to conform to new specs. Added timestamp in checkin list
+20102014 2200 Database layer rewritten to use PDO, Database Layout fixed

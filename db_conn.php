@@ -1,3 +1,7 @@
+<?php
+/*
+	seatping database setup code
+
 This program is free software. It comes without any warranty, to
 the extent permitted by applicable law. You can redistribute it
 and/or modify it under the terms of the Do What The Fuck You Want
@@ -17,3 +21,9 @@ DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
 TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION 
 
 	0. You just DO WHAT THE FUCK YOU WANT TO.
+*/
+
+	$db=new PDO("sqlite:/path/to/database/ping.db3");
+	$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_SILENT);
+	$db->query("PRAGMA foreign_keys = ON");
+?>
