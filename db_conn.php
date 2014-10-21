@@ -23,7 +23,7 @@ TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 	0. You just DO WHAT THE FUCK YOU WANT TO.
 */
 
-	$db=new PDO("sqlite:/home/cbdev/dev/seatping/ping.db3");
+	$db=new PDO($data_source);
 	$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_SILENT);
 	$db->query("PRAGMA foreign_keys = ON");
 ?>

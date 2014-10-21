@@ -22,6 +22,7 @@ TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 
 	0. You just DO WHAT THE FUCK YOU WANT TO.
 	*/
+	require_once("settings.php");
 	require_once("db_conn.php");
 	
 	$hall_data=$db->prepare("

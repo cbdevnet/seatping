@@ -22,9 +22,9 @@ TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 
 	0. You just DO WHAT THE FUCK YOU WANT TO.
 */
-	require_once("db_conn.php");
 	require_once("settings.php");
-	
+	require_once("db_conn.php");
+
 	$halls=$db->query("
 		SELECT
 			hall_id,
@@ -603,7 +603,7 @@ TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 				?>
 				<div class="box" style="text-align:right;background-color:#ddd;">
 					<a style="text-decoration:none;"
-					href="http://auth.local.host/kitinfo-accounts/verify/?service=seatping&req=unique_id,username&ident=<?php print(hash("sha256", session_id())); ?>">
+					href="<?php print($system_main); ?>?service=seatping&req=unique_id,username&ident=<?php print(hash("sha256", session_id())); ?>">
 						[Sign in with the SYSTEM]
 					</a>
 				</div>
