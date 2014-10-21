@@ -184,6 +184,53 @@ TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 		}
 	}
 	
+	if(!isset($_SESSION["user_id"])&&isset($_GET["system-login"])&&$auth_methods["system"]){
+		//system authentication
+		$token=hash("sha256", hash("sha256", session_id()).$system_password);
+		//check for token in database
+		$system_hit=$db->prepare("SELECT system_id, system_name FROM system WHERE system_token=:token");
+		$system_hit->execute(array(":token"=>$token));
+		$system_hit=$system_hit->fetch(PDO::FETCH_ASSOC);
+		
+		if($system_hit!==false){
+			//if accepted, create or load from user table
+			$user_info=$db->prepare("
+				SELECT
+					user_id,
+					user_name
+				FROM users
+				WHERE
+					user_source='system'
+					AND user_identity=:system_id
+			");
+			$user_info->execute(array(":system_id"=>$system_hit["system_id"]));
+			$user_info=$user_info->fetch(PDO::FETCH_ASSOC);
+			
+			if($user_info===false){
+				//create local user
+				$user_insert=$db->prepare("
+					INSERT INTO
+					users
+					(user_name, user_identity, user_source)
+					VALUES
+					(:name, :ident, 'system')
+				");
+				if($user_insert->execute(array(":name"=>$system_hit["system_name"],":ident"=>$system_hit["system_id"]))){
+					$user_info=array("user_id"=>$system_hit["system_id"], "user_name"=>$system_hit["system_name"]);
+				}
+				else{
+					//this is awkward. authentication probably failed because a local account
+					//using the same name exists.
+				}
+			}
+			
+			if($user_info!==false){
+				$_SESSION["user_id"]=$user_info["user_id"];
+				$_SESSION["user_name"]=htmlentities($user_info["user_name"]);
+			}
+		}
+	}
+	
 ?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -534,7 +581,7 @@ TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 		</div>
 		
 		<?php
-			if(!isset($_SESSION["user_id"])){
+			if(!isset($_SESSION["user_id"])&&$auth_methods["local"]){
 				?>
 				<div id="login" class="box">
 					<form action="" method="post">
@@ -548,6 +595,17 @@ TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 						<input type="password" name="user_password" size="7"/>
 						<input type="submit" name="login" value="Send" />
 					</form>
+				</div>
+				<?php
+			}
+			
+			if(!isset($_SESSION["user_id"])&&$auth_methods["system"]){
+				?>
+				<div class="box" style="text-align:right;background-color:#ddd;">
+					<a style="text-decoration:none;"
+					href="http://auth.local.host/kitinfo-accounts/verify/?service=seatping&req=unique_id,username&ident=<?php print(hash("sha256", session_id())); ?>">
+						[Sign in with the SYSTEM]
+					</a>
 				</div>
 				<?php
 			}
