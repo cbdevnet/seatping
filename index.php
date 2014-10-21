@@ -193,6 +193,10 @@ TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 		$system_hit=$system_hit->fetch(PDO::FETCH_ASSOC);
 		
 		if($system_hit!==false){
+			
+			$system_delete=$db->prepare("DELETE FROM system WHERE system_token=:token");
+			$system_delete->execute(":token"=>$token);
+		
 			//if accepted, create or load from user table
 			$user_info=$db->prepare("
 				SELECT
