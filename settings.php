@@ -1,5 +1,5 @@
 <?php
-	$data_source="sqlite:/home/cbdev/dev/seatping/ping.db3";
+	$data_source="sqlite:/path/to/ping.db3";
 	$auth_methods["local"]=true;
 	$auth_methods["system"]=false;
 	$pepper="YOUR_PEPPER_HERE";
