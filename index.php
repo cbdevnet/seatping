@@ -195,7 +195,7 @@ TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 		if($system_hit!==false){
 			
 			$system_delete=$db->prepare("DELETE FROM system WHERE system_token=:token");
-			$system_delete->execute(":token"=>$token);
+			$system_delete->execute(array(":token"=>$token));
 		
 			//if accepted, create or load from user table
 			$user_info=$db->prepare("
