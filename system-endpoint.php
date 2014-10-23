@@ -26,7 +26,7 @@
 	require_once("settings.php");
 	require_once("db_conn.php");
 
-	if($_SERVER["PHP_AUTH_USER"]==$system_user&&$_SERVER["PHP_AUTH_PW"]==$system_password){
+	if($auth_methods["system"]&&$_SERVER["PHP_AUTH_USER"]==$system_user&&$_SERVER["PHP_AUTH_PW"]==$system_password){
 		//var_dump($_POST);
 		$stmt=$db->prepare("INSERT INTO system (system_token, system_id, system_name) VALUES (:token, :id, :user)");
 		if(!$stmt->execute(array(":token"=>$_POST["token"], ":user"=>$_POST["username"], ":id"=>intval($_POST["unique_id"])))){
